@@ -9,6 +9,7 @@
   "scripts": {
     "copy:content": "ts-node src/script/copy_content.ts",
     "copy:model": "ts-node src/script/copy_model.ts",
+    "copy:locales": "ts-node src/script/copy_locales.ts",
     "deps": "ts-node src/script/view_deps.ts",
     "build": "qwik build",
     "build.client": "vite build",

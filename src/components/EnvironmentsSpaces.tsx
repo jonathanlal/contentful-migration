@@ -2,8 +2,9 @@ import { component$, Resource, useResource$ } from '@builder.io/qwik';
 import type { EnvironmentProps } from 'contentful-management/types';
 import type { IState } from '~/routes';
 import { getEnvironments } from '~/contentful-migrate/space';
+import { server$ } from '@builder.io/qwik-city';
 
-async function fetchEnvironments(spaceId: string) {
+export const fetchEnvironments = server$(async (spaceId: string) => {
   const environments = await getEnvironments({ spaceId });
   return (
     environments?.map((environment: EnvironmentProps) => ({
@@ -11,9 +12,9 @@ async function fetchEnvironments(spaceId: string) {
       name: environment.name,
     })) || []
   );
-}
+});
 
-export const EnvironmentsDropdown = component$(
+export default component$(
   ({ state, type }: { state: IState; type: 'source' | 'target' }) => {
     const environmentsResource = useResource$<{ id: string; name: string }[]>(
       async ({ track }) => {

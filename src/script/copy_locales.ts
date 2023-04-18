@@ -1,25 +1,20 @@
-import { copyContentModel } from "../contentful-migrate/model";
 import * as dotenv from "dotenv";
+import { copyLocales } from "../contentful-migrate/space";
 dotenv.config();
 
-const args = process.argv.slice(2);
-const content_type = args.length ? args[0].replace("content_type=", "") : "";
 const sourceSpaceId = process.env.SOURCE_SPACE_ID as string;
 const sourceEnvironmentId = process.env.SOURCE_ENVIRONMENT as string;
 const targetSpaceId = process.env.TARGET_SPACE_ID as string;
 const targetEnvironmentId = process.env.TARGET_ENVIRONMENT as string;
 
-copyContentModel({
+copyLocales({
 	sourceSpaceId: sourceSpaceId,
 	sourceEnvironmentId: sourceEnvironmentId,
 	targetSpaceId: targetSpaceId,
 	targetEnvironmentId: targetEnvironmentId,
-	contentType: content_type,
 })
-	.then((newContentModel) => {
-		console.log(
-			`New content model created in target space: '${newContentModel.name}'`,
-		);
+	.then(() => {
+		console.log("All locales copied from source space to target space");
 	})
 	.catch((e) => {
 		console.error(e);

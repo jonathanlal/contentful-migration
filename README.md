@@ -67,6 +67,12 @@ View dependencies for a specific content model:
 npm run deps content_type='microcopy'
 ```
 
+copy locales from one space to another
+
+```shell
+npm run copy:locales
+```
+
 ---
 
 ### Important notes

@@ -1,15 +1,12 @@
-import { component$, useStore, useTask$, $, useSignal } from '@builder.io/qwik';
+import { component$, useStore, useTask$, $ } from '@builder.io/qwik';
 import { type DocumentHead } from '@builder.io/qwik-city';
 import { Space } from '~/components/Space';
-import { ContentTypesDropdown } from '~/components/ContentTypes';
+import ContentTypesDropdown from '~/components/ContentTypes';
 import { isServer } from '@builder.io/qwik/build';
 import {
-  copyContentModel,
-  getAllContentTypes,
   getContentTypeDependencies,
 } from '~/contentful-migrate/model';
-import { copyContent } from '~/contentful-migrate/content';
-import { copyLocales, getLocales } from '~/contentful-migrate/space';
+import { copyContentModelSS, copyLocalesSS, createEntrySS, getAllContentTypesSS, getEntriesSS, getLocalesSS, getTotalEntriesSS, isEntryPublishedSS } from '~/utils/ss_requests';
 
 export interface IState {
   source: {
@@ -32,7 +29,9 @@ interface IInfo {
   contentTypeDependencies: string[];
   spaceLocalesMismatch: boolean;
   missingLocales: string[];
+  loading: boolean;
 }
+
 
 export default component$(() => {
   const store: IState = useStore(
@@ -56,10 +55,9 @@ export default component$(() => {
     spaceLocalesMismatch: false,
     contentTypeDependencies: [],
     missingLocales: [],
+    loading: false,
   });
   const logs: string[] = useStore([]);
-  const loading = useSignal(false);
-  const totalEntries = useSignal(0);
 
   const createLog = $((log: string) => {
     logs.push(
@@ -78,11 +76,11 @@ export default component$(() => {
 
     const { source, target, contentType } = store;
 
-    const sourceLocales = await getLocales({
+    const sourceLocales = await getLocalesSS({
       spaceId: source.spaceId,
       environmentId: source.environmentId as string,
     });
-    const targetLocales = await getLocales({
+    const targetLocales = await getLocalesSS({
       spaceId: target.spaceId,
       environmentId: target.environmentId as string,
     });
@@ -107,11 +105,11 @@ export default component$(() => {
       );
     }
 
-    const targetContentTypes = await getAllContentTypes({
+    const targetContentTypes = await getAllContentTypesSS({
       spaceId: target.spaceId,
       environmentId: target.environmentId as string,
     });
-    const sourceContentType = await getAllContentTypes({
+    const sourceContentType = await getAllContentTypesSS({
       spaceId: source.spaceId,
       environmentId: source.environmentId as string,
     }).then((types) => types.find((type) => type.sys.id === contentType));
@@ -166,7 +164,7 @@ export default component$(() => {
     ) {
       await doValidation();
 
-      const allContentTypes = await getAllContentTypes({
+      const allContentTypes = await getAllContentTypesSS({
         spaceId: sourceSpaceId,
         environmentId: sourceEnv,
       });
@@ -196,8 +194,8 @@ export default component$(() => {
   });
 
   const migrateLocales = $(async () => {
-    loading.value = true;
-    await copyLocales({
+    info.loading = true;
+    await copyLocalesSS({
       sourceSpaceId: store.source.spaceId,
       sourceEnvironmentId: store.source.environmentId as string,
       targetSpaceId: store.target.spaceId,
@@ -218,13 +216,13 @@ export default component$(() => {
         console.error(err);
       })
       .finally(() => {
-        loading.value = false;
+        info.loading = false;
       });
   });
 
   const migrateContentType = $(async () => {
-    loading.value = true;
-    await copyContentModel({
+    info.loading = true;
+    await copyContentModelSS({
       sourceSpaceId: store.source.spaceId,
       sourceEnvironmentId: store.source.environmentId as string,
       targetSpaceId: store.target.spaceId,
@@ -245,46 +243,75 @@ export default component$(() => {
         console.error(err);
       })
       .finally(() => {
-        loading.value = false;
+        info.loading = false;
       });
   });
 
   const migrateContent = $(async () => {
-    loading.value = true;
-    await copyContent({
-      sourceSpaceId: store.source.spaceId,
-      sourceEnvironmentId: store.source.environmentId as string,
-      targetSpaceId: store.target.spaceId,
-      targetEnvironmentId: store.target.environmentId as string,
-      contentType: store.contentType,
-      createLog,
-    })
-      .then(() => {
-        createLog(
-          `<b class="success">Successfully finished copying content</b> for <i>${store.contentType}</i> to taget space/environment.`
-        );
-        info.canContinue = true;
-        info.missingContentType = false;
-      })
-      .catch((err) => {
-        createLog(
-          `<b class="error">failed to copy content</b> for <i>${store.contentType}</i> to taget space/environment.`
-        );
-        console.error(err);
-        loading.value = false;
-      })
-      .finally(() => {
-        loading.value = false;
+    info.loading = true;
+
+    const sourceSpaceId = store.source.spaceId;
+    const sourceEnvironmentId = store.source.environmentId as string;
+    const targetSpaceId = store.target.spaceId;
+    const targetEnvironmentId = store.target.environmentId as string;
+    const contentType = store.contentType;
+
+    try {
+      const limitBy = 1000;
+      const totalEntries = await getTotalEntriesSS({
+        sourceSpaceId,
+        sourceEnvironmentId,
+        contentType,
       });
+
+    let processedEntries = 0;
+
+		while (processedEntries < totalEntries) {
+			const entries = await getEntriesSS({
+				contentType,
+				sourceSpaceId,
+				sourceEnvironmentId,
+				skip: processedEntries,
+				limit: limitBy,
+			});
+			if (!entries || entries.length == 0) break;
+			for (const [, entry] of entries.entries()) {
+				const entryId = entry.sys.id;
+				const fields = entry.fields;
+				const entryAttributes = {
+					content_type_id: contentType,
+					fields: fields,
+				};
+				const isPublished = await isEntryPublishedSS({
+					entryId,
+					sourceSpaceId,
+					sourceEnvironmentId,
+				});
+				const result = await createEntrySS({
+					entryId,
+					spaceId: targetSpaceId,
+					environmentId: targetEnvironmentId,
+					entryAttributes,
+					isPublished: isPublished || false,
+				});
+				const log = `(${processedEntries}/${totalEntries}) - ${result}`;
+        createLog(log);
+				processedEntries++;
+			}
+		}
+  } catch (err) {
+    console.error(err);
+  } finally {
+    info.loading = false;
+  }
   });
 
+  const loadingValue = info.loading;
   return (
     <>
       <div class="section">
         <div
-          class={
-            loading.value ? 'container center loading' : 'container center'
-          }
+          class={loadingValue ? 'container center loading' : 'container center'}
         >
           <div class="spaceDropdowns">
             <Space state={store} type="source" />
@@ -311,7 +338,7 @@ export default component$(() => {
               <h2>
                 Content migration for: <i>{store.contentType}</i>
               </h2>
-              <h3>Total entries to copy: {totalEntries.value}</h3>
+              {/* <h3>Total entries to copy: {totalEntries.value}</h3> */}
               <div class="migrateContainer">
                 <div>
                   <h2>Source</h2>
@@ -325,7 +352,7 @@ export default component$(() => {
                   <p>Target environment: {store.target.environmentId}</p>
                 </div>
               </div>
-              <button onClick$={migrateContent} disabled={loading.value}>
+              <button onClick$={migrateContent} disabled={info.loading}>
                 Begin migration
               </button>
             </div>
@@ -334,7 +361,7 @@ export default component$(() => {
             <div class="resultContainer">
               <h3 class="resultTitle">Some locales missing in target space</h3>
               <p>{info.missingLocales.toString()}</p>
-              <button onClick$={migrateLocales} disabled={loading.value}>
+              <button onClick$={migrateLocales} disabled={info.loading}>
                 Migrate locales
               </button>
             </div>
@@ -344,7 +371,7 @@ export default component$(() => {
               <h3 class="resultTitle">
                 Content type does not exist in target space
               </h3>
-              <button onClick$={migrateContentType} disabled={loading.value}>
+              <button onClick$={migrateContentType} disabled={info.loading}>
                 Migrate content type
               </button>
             </div>
@@ -357,6 +384,7 @@ export default component$(() => {
               <a
                 href={`https://app.contentful.com/spaces/${store.target.spaceId}/environments/${store.target.environmentId}/content_types/${store.contentType}/fields`}
                 target="_blank"
+                rel="noreferrer"
               >
                 Open content type in target space
               </a>
@@ -364,6 +392,7 @@ export default component$(() => {
               <a
                 href={`https://app.contentful.com/spaces/${store.source.spaceId}/environments/${store.source.environmentId}/content_types/${store.contentType}/fields`}
                 target="_blank"
+                rel="noreferrer"
               >
                 Open content type in source space
               </a>

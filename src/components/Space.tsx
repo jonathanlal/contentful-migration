@@ -1,6 +1,6 @@
 import { component$ } from '@builder.io/qwik';
 import type { IState } from '~/routes';
-import { EnvironmentsDropdown } from './EnvironmentsSpaces';
+import EnvironmentsDropdown from './EnvironmentsSpaces';
 import { SpacesDropdown } from './SpacesDropdown';
 
 export const Space = component$(
