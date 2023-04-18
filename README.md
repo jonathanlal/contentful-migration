@@ -4,11 +4,8 @@ Project for migrating content from one space to another.
 
 ### Download & Install
 
-```shell
-git clone https://github.com/hurtigruten/contentful-migration.git
-```
 
-Navigate to the project directory and install node_modules:
+Download and navigate to the project directory and install node_modules:
 
 ```shell
 npm i
@@ -29,7 +26,6 @@ Rename `.env.example` to `.env`
 
 ### Run UI
 
-Currently broken, will fix soon.
 
 ```shell
 npm run dev
@@ -93,5 +89,5 @@ npm run copy:locales
 
 - Add support for copying assets
 - Add support for copying content with links to assets
-- Bypass 404 errors by first getting all the content_ids that already exist in target space for a content type
+- Bypass 404 errors (when checking if entry exists) by first getting all the content_ids that already exist in target space for a content type
 - Fix issue where after selecting a content type there is no visual indication that stuff is loading... some qwik thing i'm not understanding
